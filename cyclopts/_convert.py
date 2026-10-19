@@ -27,6 +27,7 @@ from cyclopts.annotations import (
     is_annotated,
     is_enum_flag,
     is_nonetype,
+    is_pydantic,
     is_union,
     resolve,
     resolve_optional,
@@ -1398,6 +1399,9 @@ def takes_scalar(hint: Any) -> bool:
     hint = resolve(hint)
     if is_union(hint):
         return all(takes_scalar(member) for member in get_args(hint) if not is_nonetype(member))
+    if is_pydantic(hint) and not getattr(hint, "__pydantic_root_model__", False):
+        # Pydantic builds a model (or pydantic dataclass) from a mapping, never from positional values.
+        return True
     return not (hint is Any or is_structured_type(hint) or (get_origin(hint) or hint) is tuple)
 
 
