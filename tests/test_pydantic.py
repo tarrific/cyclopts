@@ -1561,3 +1561,64 @@ def test_pydantic_nested_cli_json_alias():
         return x
 
     assert app(["--x.inner", '{"userName": "Alice"}'], exit_on_error=False).inner.full_name == "Alice"
+
+
+@pydantic.dataclasses.dataclass
+class _PydanticDataclass:
+    a: int
+
+
+@pytest.mark.parametrize(
+    "hint",
+    [_FlagModel, _FlagModel | None, _FlagModel | bool, bool | _FlagModel, _PydanticDataclass | bool],
+)
+@pytest.mark.parametrize("value", [[1], [True], [1, 2]])
+def test_pydantic_config_array_for_model_or_scalar(hint, value):
+    """A config array errors when no member takes one; pydantic models never bind keyless field values."""
+    from cyclopts import App
+    from cyclopts.config import Dict
+
+    app = App(config=Dict({"x": value}), result_action="return_value")
+
+    @app.default
+    def main(x: hint = None):  # pyright: ignore[reportInvalidTypeForm]
+        return x
+
+    with pytest.raises(CoercionError):
+        app([], exit_on_error=False)
+
+
+class _ListRoot(pydantic.RootModel[list[int]]):
+    pass
+
+
+@pytest.mark.parametrize("hint", [_ListRoot, _ListRoot | bool])
+def test_pydantic_config_array_for_root_model(hint):
+    """A ``RootModel`` over a list still takes a config array."""
+    from cyclopts import App
+    from cyclopts.config import Dict
+
+    app = App(config=Dict({"x": [1, 2]}), result_action="return_value")
+
+    @app.default
+    def main(x: hint = None):  # pyright: ignore[reportInvalidTypeForm]
+        return x
+
+    assert app([], exit_on_error=False) == _ListRoot([1, 2])
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [(True, True), (False, False), ({"a": 1}, _FlagModel(a=1))],
+)
+def test_pydantic_config_model_or_bool(value, expected):
+    from cyclopts import App
+    from cyclopts.config import Dict
+
+    app = App(config=Dict({"x": value}), result_action="return_value")
+
+    @app.default
+    def main(x: _FlagModel | bool = False):
+        return x
+
+    assert app([], exit_on_error=False) == expected
